@@ -30,13 +30,20 @@ function decodeTIS620(data) {
  */
 function convertHtmlToJson(html) {
   const $ = cheerio.load(html);
-  let labels = [];
-  let jsonData = [];
+  let labels = []
+  let jsonData = []
+  let convertedLabel = false
+
   $('table table tbody')
     .find('tr')
     .each((i, tr) => {
       //each tr
       let trObject = {};
+
+      if (i === 1 && !convertedLabel) {
+        labels = convertLabelsToEnglish(labels)
+        convertedLabel = true
+      }
 
       $(tr)
         .find('td')
@@ -54,10 +61,34 @@ function convertHtmlToJson(html) {
             .trim();
         });
 
-      if (Object.keys(trObject).length === 0 && trObject.constructor === Object) return;
+      if (Object.keys(trObject).length === 0 && trObject.constructor === Object)
+        return;
       jsonData.push(trObject);
     });
-    return jsonData
+  return jsonData;
+}
+
+/*
+ * @param labels Array{String}
+ * @returns englishLabels Array{String}
+ */
+function convertLabelsToEnglish(labels) {
+  const dictionary = {
+    'ชื่อบริษัท' : 'company_name',
+    'ชื่อผู้บริหาร': 'director_name',
+    'ความสัมพันธ์ *': 'relationship',
+    'ประเภทหลักทรัพย์': 'type_of_asset',
+    'วันที่รับเอกสาร': 'document_receive_date',
+    'วันที่ได้มา/จำหน่าย': 'transaction_date',
+    'จำนวน': 'amount',
+    'ราคา': 'price',
+    'วิธีการได้มา/จำหน่าย': 'transaction_type',
+    'หมายเหตุ': 'note',
+  }
+
+  return labels.map((label) => {
+      return dictionary[label]
+  })
 }
 
 (async () => {
@@ -66,7 +97,7 @@ function convertHtmlToJson(html) {
     data = await getData();
     decodedData = decodeTIS620(data);
     const convertedData = convertHtmlToJson(decodedData);
-    console.log("convertedData = ", JSON.stringify(convertedData, null, 4));
+    console.log('convertedData = ', JSON.stringify(convertedData, null, 4));
   } catch (error) {
     return console.error(error);
   }
