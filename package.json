@@ -8,5 +8,10 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "iconv-lite": "^0.4.23",
+    "request": "^2.87.0",
+    "request-promise": "^4.2.2"
+  }
 }
