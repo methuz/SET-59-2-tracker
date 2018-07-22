@@ -30,9 +30,8 @@ function decodeTIS620(data) {
  */
 function convertHtmlToJson(html) {
   const $ = cheerio.load(html);
-  let labels = []
-  let jsonData = []
-  let convertedLabel = false
+  let jsonData = [];
+  let labels;
 
   $('table table tbody')
     .find('tr')
@@ -40,32 +39,50 @@ function convertHtmlToJson(html) {
       //each tr
       let trObject = {};
 
-      if (i === 1 && !convertedLabel) {
-        labels = convertLabelsToEnglish(labels)
-        convertedLabel = true
+      if (i === 0) {
+        labels = getLabels($, tr);
+        console.log('labels = ', JSON.stringify(labels, null, 4));
+        return;
       }
 
-      $(tr)
-        .find('td')
-        .each((j, td) => {
-          //each td
-          if (i === 0) {
-            return labels.push(
-              $(td)
-                .text()
-                .trim(),
-            );
-          }
-          trObject[labels[j]] = $(td)
-            .text()
-            .trim();
-        });
-
-      if (Object.keys(trObject).length === 0 && trObject.constructor === Object)
-        return;
-      jsonData.push(trObject);
+      jsonData.push(getTrObject($, tr, labels));
     });
   return jsonData;
+}
+
+/**
+ * @param tr
+ * @returns labels Array[String]
+ */
+function getLabels($, tr) {
+  let labels = [];
+  $(tr)
+    .find('td')
+    .each((j, td) => {
+      return labels.push(
+        $(td)
+          .text()
+          .trim(),
+      );
+    });
+  return convertLabelsToEnglish(labels);
+}
+
+/**
+ * @param tr
+ * @returns trObject Object
+ */
+function getTrObject($, tr, labels) {
+  let trObject = {}
+  $(tr)
+    .find('td')
+    .each((j, td) => {
+      //each td
+      trObject[labels[j]] = $(td)
+        .text()
+        .trim();
+    });
+    return trObject
 }
 
 /*
@@ -74,21 +91,21 @@ function convertHtmlToJson(html) {
  */
 function convertLabelsToEnglish(labels) {
   const dictionary = {
-    'ชื่อบริษัท' : 'company_name',
-    'ชื่อผู้บริหาร': 'director_name',
+    ชื่อบริษัท: 'company_name',
+    ชื่อผู้บริหาร: 'director_name',
     'ความสัมพันธ์ *': 'relationship',
-    'ประเภทหลักทรัพย์': 'type_of_asset',
-    'วันที่รับเอกสาร': 'document_receive_date',
+    ประเภทหลักทรัพย์: 'type_of_asset',
+    วันที่รับเอกสาร: 'document_receive_date',
     'วันที่ได้มา/จำหน่าย': 'transaction_date',
-    'จำนวน': 'amount',
-    'ราคา': 'price',
+    จำนวน: 'amount',
+    ราคา: 'price',
     'วิธีการได้มา/จำหน่าย': 'transaction_type',
-    'หมายเหตุ': 'note',
-  }
+    หมายเหตุ: 'note',
+  };
 
-  return labels.map((label) => {
-      return dictionary[label]
-  })
+  return labels.map(label => {
+    return dictionary[label];
+  });
 }
 
 (async () => {
