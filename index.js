@@ -1,13 +1,28 @@
 const cheerio = require('cheerio');
+const fs = require('fs');
 const iconv = require('iconv-lite');
+const moment = require('moment');
+const mongoose = require('mongoose');
 const request = require('request-promise');
+const yaml = require('js-yaml');
 
-const uri = 'http://capital.sec.or.th/webapp/corp_fin2/daily59.php';
+const model = require('./lib/model.js');
+
+let config;
+
+async function init() {
+  try {
+    config = yaml.safeLoad(fs.readFileSync(`${__dirname}/config.yml`, 'utf8'));
+    await mongoose.connect(config.db.uri);
+  } catch (e) {
+    console.log(e);
+  }
+}
 
 function getData() {
   return request({
     method: 'GET',
-    uri,
+    uri: config.source.uri,
     encoding: null,
   });
 }
@@ -22,7 +37,7 @@ function decodeTIS620(data) {
 
 /*
  * @param html String
- * @returns jsonData Object
+ * @returns jsonData Array
  * [{
  *   'label0' : 'td0'
  *   'label1' : 'td1'
@@ -73,7 +88,7 @@ function getLabels($, tr) {
  * @returns trObject Object
  */
 function getTrObject($, tr, labels) {
-  let trObject = {}
+  let trObject = {};
   $(tr)
     .find('td')
     .each((j, td) => {
@@ -82,7 +97,7 @@ function getTrObject($, tr, labels) {
         .text()
         .trim();
     });
-    return trObject
+  return trObject;
 }
 
 /*
@@ -108,13 +123,69 @@ function convertLabelsToEnglish(labels) {
   });
 }
 
+/**
+ * @param data Object company data
+ * @returns formattedData Object formated data
+ */
+function formatData(data) {
+    data.symbol = companyNameToSymbol(data.company_name)
+    console.log("data.amount = ", JSON.stringify(data.amount, null, 4));
+    data.amount = +data.amount.split(',').join('')
+    data.price = +data.price
+
+    if (data.transaction_type === 'ซื้อ') {
+        data.transaction_type = 'buy'
+    } else if (data.transaction_type === 'ขาย'){
+        data.transaction_type = 'sell'
+    }
+
+    data.document_receive_date = dateFormat(data.document_receive_date)
+    data.transaction_date = dateFormat(data.transaction_date)
+
+    return data
+}
+
+/**
+ * @param date string
+ * @returns momentDate Moment
+ */
+function dateFormat(date) {
+ const splitedDate = date.split('/')
+ const year = +splitedDate.pop() - 543
+ splitedDate.push(year)
+ return moment(splitedDate.join(), 'DD/MM/YY')
+}
+
+
+/**
+ * @param name String
+ * @returns symbol String
+ */
+function companyNameToSymbol(name) {
+  const exp = /\((\w+)\)$/g;
+  const match = exp.exec(name);
+  if (match === null || match.length < 2 || match[1].length === 0) {
+    console.error('Error regular expression', match, name);
+    return null;
+  }
+  return match[1];
+}
+
 (async () => {
   let data, decodedData;
   try {
+    await init();
     data = await getData();
     decodedData = decodeTIS620(data);
     const convertedData = convertHtmlToJson(decodedData);
-    console.log('convertedData = ', JSON.stringify(convertedData, null, 4));
+    const formattedData = convertedData.map(formatData)
+
+    const insertPromises = formattedData.map((d) => {
+        return (new model(d)).save()
+    })
+
+    const insertResults = await Promise.all(insertPromises)
+
   } catch (error) {
     return console.error(error);
   }
